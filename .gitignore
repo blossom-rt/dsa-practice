@@ -1,0 +1,26 @@
+# 编译产物
+*.exe
+*.obj
+*.o
+
+# 编译器临时文件
+*.s
+*.tmp
+
+# 系统文件
+Thumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+
+# 程序运行时自动生成的数据文件（跑程序后自动出现，无需提交）
+original.txt
+encrypted.txt
+decrypted.txt
+multi_encrypted.txt
+multi_decrypted.txt
+file.txt
+data.dat
+abc
