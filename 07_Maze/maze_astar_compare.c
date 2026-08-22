@@ -24,6 +24,9 @@ int maze[ROWS][COLS] = {
     {0,0,0,0,0,1,0,0,0,0}
 };
 
+// 记录上次搜索得到的路径长度，用于算法间对照验证
+int g_lastPathLength = -1;
+
 // 定义Node结构体
 struct Node {
     int x, y;
@@ -128,6 +131,18 @@ bool isInQueue(PriorityQueue* q, int x, int y) {
     return false;
 }
 
+// 释放 closed 列表中所有已访问节点（dequeue 出的节点都存放在其中）
+void freeClosed(Node* closed[ROWS][COLS]) {
+    int i, j;
+    for (i = 0; i < ROWS; i++) {
+        for (j = 0; j < COLS; j++) {
+            if (closed[i][j] != NULL) {
+                free(closed[i][j]);
+            }
+        }
+    }
+}
+
 // 打印带路径的迷宫图
 void printMazeWithPath(Node** pathNodes, int pathLength) {
     int mazeCopy[ROWS][COLS],i,j;
@@ -157,13 +172,18 @@ bool aStar(int startX, int startY, int endX, int endY) {
         return false;
     }
     
-    // 创建一个优先队列open 
+    // 创建一个优先队列open
     PriorityQueue* open = createQueue();
     bool closed[ROWS][COLS] = {false};
-    
-    // 起点节点的创建 
+
+    // 节点登记表：追踪所有创建的节点，用于统一释放（dequeue 出的节点不会随 destroyQueue 回收）
+    Node* allNodes[ROWS * COLS];
+    int allCount = 0;
+
+    // 起点节点的创建
     Node* start = createNode(startX, startY, 0, heuristic(startX, startY, endX, endY), NULL);
-    enqueue(open, start); // 使起点节点入open队列 
+    enqueue(open, start);
+    allNodes[allCount++] = start; // 使起点节点入open队列 
     
     // 定义方向数组，表示四个可能的方向（上、下、左、右） 
     int directions[4][2] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
@@ -192,7 +212,8 @@ bool aStar(int startX, int startY, int endX, int endY) {
                 pathNodes[pathLength - i - 1] = temp;
             }
             
-            // 打印路径并显示 
+            // 打印路径并显示
+            g_lastPathLength = pathLength;
             printf("A*找到路径！路径长度: %d\n", pathLength);
             printf("路径坐标:\n");
             for (i = 0; i < pathLength; i++) {
@@ -200,8 +221,12 @@ bool aStar(int startX, int startY, int endX, int endY) {
             }
             
             printMazeWithPath(pathNodes, pathLength);
-            
-            destroyQueue(open); // 销毁open队列 
+
+            // 释放所有登记节点，再销毁队列结构（登记表已涵盖队列内的节点）
+            int k;
+            for (k = 0; k < allCount; k++) free(allNodes[k]);
+            free(open->nodes);
+            free(open);
             return true;
         }
         
@@ -222,9 +247,9 @@ bool aStar(int startX, int startY, int endX, int endY) {
             int g = current->g + 1;
             Node* neighbor = createNode(nx, ny, g, heuristic(nx, ny, endX, endY), current);
             
-            // 判断是否加入open队列 
+            // 判断是否加入open队列
             if (isInQueue(open, nx, ny)) {
-                // 检查是否有更优路径，发现更优路径则更新 
+                // 检查是否有更优路径，发现更优路径则更新
                 bool found = false;
                 for (j = 0; j < open->size; j++) {
                     if (open->nodes[j]->x == nx && open->nodes[j]->y == ny) {
@@ -237,17 +262,24 @@ bool aStar(int startX, int startY, int endX, int endY) {
                         break;
                     }
                 }
-                if (found) free(neighbor); // 否则释放新节点 
-                else enqueue(open, neighbor); // 如果不在open中，直接加入 
+                if (found) free(neighbor); // 否则释放新节点
+                else {
+                    enqueue(open, neighbor); // 如果不在open中，直接加入
+                    allNodes[allCount++] = neighbor;
+                }
             } else {
-                enqueue(open, neighbor); // 合法且未访问的邻居节点被加入open列表 
+                enqueue(open, neighbor); // 合法且未访问的邻居节点被加入open列表
+                allNodes[allCount++] = neighbor;
             }
         }
     }
     
-    // open队列为空，说明没有找到路径 
+    // open队列为空，说明没有找到路径
     printf("A*未找到路径！\n");
-    destroyQueue(open);
+    int k;
+    for (k = 0; k < allCount; k++) free(allNodes[k]);
+    free(open->nodes);
+    free(open);
     return false;
 }
 
@@ -303,14 +335,28 @@ bool bidirectionalAStar(int startX, int startY, int endX, int endY) {
             if (!isValid(nx, ny)) continue;
             if (closedForward[nx][ny] != NULL) continue;
             
-            // 创建邻居节点 
+            // 创建邻居节点
             int g = currentF->g + 1;
             Node* neighbor = createNode(nx, ny, g, heuristic(nx, ny, endX, endY), currentF);
-            
-            if (!isInQueue(openForward, nx, ny) || g < neighbor->g) {
-                enqueue(openForward, neighbor); // 若不在open或找到更优路径，加入 
+
+            if (isInQueue(openForward, nx, ny)) {
+                // 节点已在 open 中：检查是否找到更优路径，是则更新原节点的 g/f/parent（reopen）
+                bool found = false;
+                int j;
+                for (j = 0; j < openForward->size; j++) {
+                    if (openForward->nodes[j]->x == nx && openForward->nodes[j]->y == ny) {
+                        if (g < openForward->nodes[j]->g) {
+                            openForward->nodes[j]->g = g;
+                            openForward->nodes[j]->f = g + openForward->nodes[j]->h;
+                            openForward->nodes[j]->parent = currentF;
+                        }
+                        found = true;
+                        break;
+                    }
+                }
+                free(neighbor); // 新节点不再需要，由原节点继续参与搜索
             } else {
-                free(neighbor); // 否则释放内存 
+                enqueue(openForward, neighbor); // 不在 open 中，直接加入
             }
         }
         
@@ -339,11 +385,25 @@ bool bidirectionalAStar(int startX, int startY, int endX, int endY) {
             // 创建邻居节点
             int g = currentB->g + 1;
             Node* neighbor = createNode(nx, ny, g, heuristic(nx, ny, startX, startY), currentB);
-            
-            if (!isInQueue(openBackward, nx, ny) || g < neighbor->g) {
-                enqueue(openBackward, neighbor); // 若不在open或找到更优路径，加入
+
+            if (isInQueue(openBackward, nx, ny)) {
+                // 节点已在 open 中：检查是否找到更优路径，是则更新原节点的 g/f/parent（reopen）
+                bool found = false;
+                int j;
+                for (j = 0; j < openBackward->size; j++) {
+                    if (openBackward->nodes[j]->x == nx && openBackward->nodes[j]->y == ny) {
+                        if (g < openBackward->nodes[j]->g) {
+                            openBackward->nodes[j]->g = g;
+                            openBackward->nodes[j]->f = g + openBackward->nodes[j]->h;
+                            openBackward->nodes[j]->parent = currentB;
+                        }
+                        found = true;
+                        break;
+                    }
+                }
+                free(neighbor); // 新节点不再需要，由原节点继续参与搜索
             } else {
-                free(neighbor); // 否则释放内存
+                enqueue(openBackward, neighbor); // 不在 open 中，直接加入
             }
         }
     }
@@ -369,32 +429,75 @@ bool bidirectionalAStar(int startX, int startY, int endX, int endY) {
             pathNodes[pathLength - i - 1] = temp;
         }
         
-        // 从后向路径构建
+        // 从后向路径构建（相遇点已由前向路径包含，从后向相遇点的父节点开始，避免重复计入）
         p = closedBackward[meetNode->x][meetNode->y];
-        while (p != NULL) {
-            pathNodes[pathLength++] = p;
+        if (p != NULL) {
             p = p->parent;
+            while (p != NULL) {
+                pathNodes[pathLength++] = p;
+                p = p->parent;
+            }
         }
-        
-        // 打印路径并退出 
+
+        // 打印路径并退出
+        g_lastPathLength = pathLength;
         printf("双向A*找到路径！路径长度: %d\n", pathLength);
         printf("路径坐标:\n");
         for (i = 0; i < pathLength; i++) {
             printf("(%d, %d)\n", pathNodes[i]->x, pathNodes[i]->y);
         }
-        
+
         printMazeWithPath(pathNodes, pathLength);
-        
+
+        // 释放所有已访问节点（closed 数组中的 dequeue 节点），再销毁队列结构
+        freeClosed(closedForward);
+        freeClosed(closedBackward);
         destroyQueue(openForward);
         destroyQueue(openBackward);
         return true;
     }
-    
+
     // 两个open队列为空，说明没有找到路径
     printf("双向A*未找到路径！\n");
+    freeClosed(closedForward);
+    freeClosed(closedBackward);
     destroyQueue(openForward);
     destroyQueue(openBackward);
     return false;
+}
+
+// BFS 求最短路径的节点数（无权网格的 ground truth，与 A* 的 pathLength 约定一致；找不到返回 -1）
+int bfsShortestPath(int startX, int startY, int endX, int endY) {
+    typedef struct { int x, y; } Point;
+    Point queue[ROWS * COLS];
+    int front = 0, rear = 0;
+    bool visited[ROWS][COLS] = {false};
+    int dist[ROWS][COLS];
+    int directions[4][2] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
+
+    memset(dist, -1, sizeof(dist));
+    queue[rear++] = (Point){startX, startY};
+    visited[startX][startY] = true;
+    dist[startX][startY] = 0;
+
+    while (front < rear) {
+        Point current = queue[front++];
+        if (current.x == endX && current.y == endY) {
+            // dist 数的是步数，路径节点数 = 步数 + 1（与 A* 的 pathLength 约定一致）
+            return dist[current.x][current.y] + 1;
+        }
+        int i;
+        for (i = 0; i < 4; i++) {
+            int nx = current.x + directions[i][0];
+            int ny = current.y + directions[i][1];
+            if (isValid(nx, ny) && !visited[nx][ny]) {
+                visited[nx][ny] = true;
+                dist[nx][ny] = dist[current.x][current.y] + 1;
+                queue[rear++] = (Point){nx, ny};
+            }
+        }
+    }
+    return -1;
 }
 
 int main() {
@@ -402,15 +505,31 @@ int main() {
     int startX = 0, startY = 0;
     int endX = ROWS - 1, endY = COLS - 1;
     
-    // 运行单向A*算法 
+    // 运行单向A*算法
     printf("A*搜索算法求解老鼠走迷宫问题\n");
     printf("起点: (%d, %d), 终点: (%d, %d)\n\n", startX, startY, endX, endY);
     aStar(startX, startY, endX, endY);
-    
+    int singleLen = g_lastPathLength;
+
     // 运行双向A*算法
     printf("\n双向A*搜索算法求解老鼠走迷宫问题\n");
     printf("起点: (%d, %d), 终点: (%d, %d)\n\n", startX, startY, endX, endY);
-    bidirectionalAStar(startX, startY, endX, endY); 
-    
+    bidirectionalAStar(startX, startY, endX, endY);
+    int biLen = g_lastPathLength;
+
+    // 对照验证：BFS 是无权网格的 ground truth（数学上保证最短），两个 A* 必须都等于它
+    int bfsLen = bfsShortestPath(startX, startY, endX, endY);
+    printf("\n对照验证\n");
+    printf("BFS(最短真值): %d, 单向 A*: %d, 双向 A*: %d\n", bfsLen, singleLen, biLen);
+    if (singleLen != bfsLen) {
+        printf("验证失败！单向 A* 未达到最短路径。\n");
+        return 1;
+    }
+    if (biLen != bfsLen) {
+        printf("验证失败！双向 A* 未达到最短路径（ reopen 逻辑有误）。\n");
+        return 1;
+    }
+    printf("验证通过：BFS / 单向 A* / 双向 A* 三者路径长度一致，均为最短。\n");
+
     return 0;
 }
