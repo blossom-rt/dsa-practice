@@ -256,12 +256,12 @@ int main() {
     int pathLength;
     
     // 自驾路径规划
-    printf("=== 自驾路径规划 ===\n");
+    printf("自驾路径规划\n");
     dijkstra(&graph, n1, n9, 0, path, &pathLength);
     printPath(&graph, path, pathLength, 0);
     
     // 步行路径规划
-    printf("\n=== 步行路径规划 ===\n");
+    printf("\n步行路径规划\n");
     dijkstra(&graph, n1, n9, 1, path, &pathLength);
     printPath(&graph, path, pathLength, 1);
     

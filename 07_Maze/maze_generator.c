@@ -158,17 +158,17 @@ int main() {
     srand(time(NULL));  // 初始化随机数种子
 
     // 生成并测试简单迷宫
-    printf("===== 简单迷宫 =====\n");
+    printf("简单迷宫\n");
     generateSimpleMaze();
     printMaze();
     
     // 生成并测试复杂迷宫
-    printf("===== 复杂迷宫 =====\n");
+    printf("复杂迷宫\n");
     generateComplexMaze();
     printMaze();
     
     // 生成并测试不可解迷宫
-    printf("===== 不可解迷宫 =====\n");
+    printf("不可解迷宫\n");
     generateUnsolvableMaze();
     printMaze();
     

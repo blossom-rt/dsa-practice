@@ -283,7 +283,7 @@ int main() {
     int pathLength;
     
     // 管线规划
-    printf("=== 西气东输管线规划 ===\n");
+    printf("西气东输管线规划\n");
     aStar(&graph, n1, n9, path, &pathLength);
     printPath(&graph, path, pathLength);
     

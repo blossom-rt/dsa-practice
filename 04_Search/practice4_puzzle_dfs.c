@@ -67,7 +67,7 @@ void printState(int state[ROW][COL]) {
         }
         printf("\n");
     }
-    printf("********************\n");
+    printf("\n");
 }
 
 // 复制状态
