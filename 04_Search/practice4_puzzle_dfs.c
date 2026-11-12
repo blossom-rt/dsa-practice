@@ -20,28 +20,28 @@ typedef struct Node {
 } Node;
 
 // 堆栈结构体（用于非递归 DFS）
-typedef struct Stack {
+typedef struct PuzzleStack {
     Node *data[10000];
     int top;
-} Stack;
+} PuzzleStack;
 
 // 初始化堆栈
-void initStack(Stack *stack) {
+void initStack(PuzzleStack *stack) {
     stack->top = -1;
 }
 
 // 判断堆栈是否为空
-int isStackEmpty(Stack *stack) {
+int isStackEmpty(PuzzleStack *stack) {
     return stack->top == -1;
 }
 
 // 入栈操作
-void push(Stack *stack, Node *node) {
+void push(PuzzleStack *stack, Node *node) {
     stack->data[++stack->top] = node;
 }
 
 // 出栈操作
-Node* pop(Stack *stack) {
+Node* pop(PuzzleStack *stack) {
     return stack->data[stack->top--];
 }
 
@@ -192,7 +192,7 @@ int dfsRecursive(int current[ROW][COL], Node *path, int step, int *maxStep) {
 
 // 非递归（堆栈）DFS 实现 - 修改后
 int dfsStack(int start[ROW][COL], int *maxStep) {
-    Stack stack;
+    PuzzleStack stack;
     initStack(&stack);
 
     // 创建初始节点
